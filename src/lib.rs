@@ -13,6 +13,7 @@ use nix::sys::socket::getsockname;
 pub const SD_LISTEN_FDS_START: i32 = 3;
 
 #[derive(Debug)]
+/// https://www.freedesktop.org/software/systemd/man/systemd.socket.html
 pub enum SocketType {
     Fifo(RawFd),
     Special(RawFd),
