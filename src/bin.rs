@@ -5,6 +5,6 @@ use std::os::unix::fs::FileTypeExt;
 
 fn main() {
     eprintln!("hello");
-    let fds = sd_listen_fds(false).unwrap();
+    let fds = sd_listen_fds_with_names(false).unwrap();
     eprintln!("{:?}", fds);
 }

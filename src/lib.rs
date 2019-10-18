@@ -10,9 +10,9 @@ use nix::sys::socket::SockAddr;
 use nix::mqueue::mq_getattr;
 use nix::sys::socket::getsockname;
 
-pub const SD_LISTEN_FDS_START: i32 = 3;
+pub const SD_LISTEN_FDS_START: RawFd = 3;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 /// https://www.freedesktop.org/software/systemd/man/systemd.socket.html
 pub enum SocketType {
     Fifo(RawFd),
@@ -56,6 +56,9 @@ pub fn sd_listen_fds(unset_env: bool) -> Result<Vec<SocketType>, Error> {
     let fds = env::var("LISTEN_FDS").unwrap();
     let fds = fds.parse::<i32>().unwrap();
 
+    let names = env::var("LISTEN_FDNAMES").unwrap();
+    eprintln!("{}", names);
+
     if unset_env {
         env::remove_var("LISTEN_PID");
         env::remove_var("LISTEN_FDS");
@@ -64,6 +67,33 @@ pub fn sd_listen_fds(unset_env: bool) -> Result<Vec<SocketType>, Error> {
 
     let vec = socks_from_fds(fds);
     Ok(vec)
+}
+
+pub fn sd_listen_fds_with_names(unset_env: bool) -> Result<Vec<(SocketType, String)>, Error> {
+    let pid = env::var("LISTEN_PID").unwrap();
+    let pid = pid.parse::<u32>().unwrap();
+    if process::id() != pid {
+        return Err(Error::new(ErrorKind::InvalidData, "Pid mismatch"));
+    }
+
+    let fds = env::var("LISTEN_FDS").unwrap();
+    let fds = fds.parse::<i32>().unwrap();
+
+    let names = env::var("LISTEN_FDNAMES").unwrap();
+    eprintln!("{}", names);
+
+    let names: Vec<String> = names.split(":").map(String::from).collect();
+    let vec = socks_from_fds(fds);
+
+    let out = vec.into_iter().zip(names.into_iter()).collect();
+
+    if unset_env {
+        env::remove_var("LISTEN_PID");
+        env::remove_var("LISTEN_FDS");
+        env::remove_var("LISTEN_FDNAMES");
+    }
+
+    Ok(out)
 }
 
 fn socks_from_fds(fds: RawFd) -> Vec<SocketType> {
