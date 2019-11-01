@@ -1,7 +1,6 @@
 use std::env;
 use std::process;
 use std::os::unix::io::RawFd;
-//use std::io::Result;
 use std::io::{Error, ErrorKind};
 use std::convert::TryFrom;
 
@@ -140,8 +139,44 @@ pub fn fd_is_mq(fd: RawFd) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::process::Command;
+    use std::os::unix::net::UnixListener;
+    use std::os::unix::io::AsRawFd;
+    use nix::unistd::dup2;
+    use nix::unistd::{fork, ForkResult};
+    use nix::sys::wait::waitpid;
+    use std::{thread, time};
+
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
+    fn test_tcp_socket() {
+        let path = "./socket";
+        match fork() {
+            Ok(ForkResult::Parent { child, .. }) => {
+                println!("Continuing execution in parent process, new child has pid: {}", child);
+                let ten_millis = time::Duration::from_millis(10);
+                thread::sleep(ten_millis);
+                Command::new("ncat")
+                        .args(&["-U", path])
+                        .output()
+                        .expect("failed to execute process");
+                waitpid(child, None);
+            }
+            Ok(ForkResult::Child) => {
+                std::fs::remove_file(path);
+                let (stream, _) = UnixListener::bind(path).expect("UNIXSTREAM").accept().unwrap();
+                let stream = stream.as_raw_fd();
+                dup2(stream, 3);
+                eprintln!("stream {}", stream);
+                let pid = process::id();
+                env::set_var("LISTEN_PID", pid.to_string());
+                env::set_var("LISTEN_FDS", "1");
+                env::set_var("LISTEN_FDNAMES", "");
+
+                let fds = sd_listen_fds(false);
+                eprintln!("{:?}", fds);
+            }
+            Err(_) => panic!("fork failed"),
+        }
     }
 }
