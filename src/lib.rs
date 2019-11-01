@@ -55,17 +55,16 @@ pub fn sd_booted() -> bool {
 }
 
 pub fn sd_listen_fds(unset_env: bool) -> Result<Vec<SocketType>, Error> {
-    let pid = env::var("LISTEN_PID").unwrap();
+    let pid = env::var("LISTEN_PID").expect("LISTEN_PID");
     let pid = pid.parse::<u32>().unwrap();
     if process::id() != pid {
         return Err(Error::new(ErrorKind::InvalidData, "Pid mismatch"));
     }
 
-    let fds = env::var("LISTEN_FDS").unwrap();
+    let fds = env::var("LISTEN_FDS").expect("LISTEN_FDS");
     let fds = fds.parse::<i32>().unwrap();
 
-    let names = env::var("LISTEN_FDNAMES").unwrap();
-    eprintln!("{}", names);
+    let names = env::var("LISTEN_FDNAMES").expect("LISTEN_FDNAMES");
 
     if unset_env {
         env::remove_var("LISTEN_PID");
@@ -78,17 +77,16 @@ pub fn sd_listen_fds(unset_env: bool) -> Result<Vec<SocketType>, Error> {
 }
 
 pub fn sd_listen_fds_with_names(unset_env: bool) -> Result<Vec<(SocketType, String)>, Error> {
-    let pid = env::var("LISTEN_PID").unwrap();
+    let pid = env::var("LISTEN_PID").expect("LISTEN_PID");
     let pid = pid.parse::<u32>().unwrap();
     if process::id() != pid {
         return Err(Error::new(ErrorKind::InvalidData, "Pid mismatch"));
     }
 
-    let fds = env::var("LISTEN_FDS").unwrap();
+    let fds = env::var("LISTEN_FDS").expect("LISTEN_FDS");
     let fds = fds.parse::<i32>().unwrap();
 
-    let names = env::var("LISTEN_FDNAMES").unwrap();
-    eprintln!("{}", names);
+    let names = env::var("LISTEN_FDNAMES").expect("LISTEN_FDNAMES");
 
     let names: Vec<String> = names.split(":").map(String::from).collect();
     let vec = socks_from_fds(fds);
@@ -107,7 +105,7 @@ pub fn sd_listen_fds_with_names(unset_env: bool) -> Result<Vec<(SocketType, Stri
 fn socks_from_fds(fds: RawFd) -> Vec<SocketType> {
     let mut vec = Vec::new();
     for fd in SD_LISTEN_FDS_START..SD_LISTEN_FDS_START+fds {
-        let sock = SocketType::try_from(fd).unwrap();
+        let sock = SocketType::try_from(fd).expect("Socket type conversion");
         vec.push(sock);
     }
 
@@ -115,27 +113,39 @@ fn socks_from_fds(fds: RawFd) -> Vec<SocketType> {
 }
 
 pub fn fd_is_fifo(fd: RawFd) -> bool {
-    let stat = fstat(fd).unwrap();
-    (stat.st_mode & 0170000) == 0010000
+    let stat = fstat(fd);
+    if stat.is_err() {
+        return false;
+    } else {
+        (stat.unwrap().st_mode & 0170000) == 0010000
+    }
 }
 
 pub fn fd_is_special(fd: RawFd) -> bool {
-    let stat = fstat(fd).unwrap();
-    (stat.st_mode & 0170000) == 0100000
+    let stat = fstat(fd);
+    if stat.is_err() {
+        return false;
+    } else {
+        (stat.unwrap().st_mode & 0170000) == 0100000
+    }
 }
 
 pub fn fd_is_inet(fd: RawFd) -> bool {
-    let addr = getsockname(fd).unwrap();
-    if let SockAddr::Inet(unix_addr) = addr {
-        return true;
+    let addr = getsockname(fd);
+    if addr.is_ok() {
+        if let SockAddr::Inet(unix_addr) = addr.unwrap() {
+            return true;
+        }
     }
     return false;
 }
 
 pub fn fd_is_unix(fd: RawFd) -> bool {
-    let addr = getsockname(fd).unwrap();
-    if let SockAddr::Unix(unix_addr) = addr {
-        return true;
+    let addr = getsockname(fd);
+    if addr.is_ok() {
+        if let SockAddr::Unix(unix_addr) = addr.unwrap() {
+            return true;
+        }
     }
     return false;
 }
@@ -158,7 +168,7 @@ mod tests {
     use std::{thread, time};
 
     #[test]
-    fn test_tcp_socket() {
+    fn test_unix_socket_no_names() {
         let path = "./socket";
         match fork() {
             Ok(ForkResult::Parent { child, .. }) => {
