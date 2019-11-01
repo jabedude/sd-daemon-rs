@@ -21,6 +21,15 @@ pub enum SocketType {
     Mq(RawFd),
 }
 
+impl SocketType {
+    pub fn is_unix(&self) -> bool {
+        match self {
+            SocketType::Unix(_) => true,
+            _ => false,
+        }
+    }
+}
+
 impl TryFrom<RawFd> for SocketType {
     type Error = &'static str;
 
@@ -175,6 +184,8 @@ mod tests {
 
                 let fds = sd_listen_fds(false);
                 eprintln!("{:?}", fds);
+                assert!(fds.is_ok());
+                assert!(fds.unwrap()[0].is_unix());
             }
             Err(_) => panic!("fork failed"),
         }
