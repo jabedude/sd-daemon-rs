@@ -28,6 +28,13 @@ impl SocketType {
             _ => false,
         }
     }
+
+    pub fn is_inet(&self) -> bool {
+        match self {
+            SocketType::Inet(_) => true,
+            _ => false,
+        }
+    }
 }
 
 impl TryFrom<RawFd> for SocketType {
