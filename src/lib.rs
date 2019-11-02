@@ -173,6 +173,7 @@ mod tests {
     use nix::unistd::{fork, ForkResult};
     use nix::sys::wait::waitpid;
     use std::{thread, time};
+    use std::net::TcpListener;
 
     #[test]
     fn test_unix_socket_no_names() {
@@ -203,6 +204,39 @@ mod tests {
                 eprintln!("{:?}", fds);
                 assert!(fds.is_ok());
                 assert!(fds.unwrap()[0].is_unix());
+            }
+            Err(_) => panic!("fork failed"),
+        }
+    }
+
+    #[test]
+    fn test_tcp_socket_no_names() {
+        match fork() {
+            Ok(ForkResult::Parent { child, .. }) => {
+                println!("Continuing execution in parent process, new child has pid: {}", child);
+                let ten_millis = time::Duration::from_millis(50);
+                thread::sleep(ten_millis);
+                let out = Command::new("ncat")
+                        .args(&["-z", "127.0.0.1", "7878"])
+                        .output()
+                        .expect("failed to execute process");
+                eprintln!("parent ret: {} output: {}", out.status, std::str::from_utf8(&out.stdout).unwrap());
+                waitpid(child, None);
+            }
+            Ok(ForkResult::Child) => {
+                let (stream, _) = TcpListener::bind("127.0.0.1:7878").expect("TCPLISTENER").accept().unwrap();
+                let stream = stream.as_raw_fd();
+                dup2(stream, 3);
+                eprintln!("stream {}", stream);
+                let pid = process::id();
+                env::set_var("LISTEN_PID", pid.to_string());
+                env::set_var("LISTEN_FDS", "1");
+                env::set_var("LISTEN_FDNAMES", "");
+
+                let fds = sd_listen_fds(false);
+                eprintln!("{:?}", fds);
+                assert!(fds.is_ok());
+                assert!(fds.unwrap()[0].is_inet());
             }
             Err(_) => panic!("fork failed"),
         }
